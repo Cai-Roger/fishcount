@@ -45,7 +45,7 @@ if page == "🛠️ 品項名稱及價格設定":
         num_rows="dynamic",
         use_container_width=True,
         hide_index=True,
-        height=300,  # 👈 這裡加上 height 拉長表格
+        height=400,  # 👈 這裡加上 height 拉長表格
         column_config={
             "單價": st.column_config.NumberColumn("預設單價", format="%d 元", min_value=0)
         },
