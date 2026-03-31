@@ -14,7 +14,7 @@ def apply_gray_style(df, cols):
     except AttributeError:
         return df.style.applymap(_style, subset=valid_cols)
 
-# --- 2. 初始化 Session State (核心資料儲存) ---
+# --- 2. 初始化 Session State ---
 
 if 'fish_master' not in st.session_state:
     st.session_state.fish_master = pd.DataFrame({
@@ -39,13 +39,12 @@ if page == "🛠️ 品項名稱及價格設定":
     st.title("🛠️ 品項與價格管理")
     st.write("您可以在此修改現有魚種、調整價格，或是新增/刪除品項。")
     
-    # 設定頁的表格也可以加上 height 來拉長
     new_master = st.data_editor(
         st.session_state.fish_master,
         num_rows="dynamic",
         use_container_width=True,
         hide_index=True,
-        height=400,  # 👈 這裡加上 height 拉長表格
+        height=600,
         column_config={
             "單價": st.column_config.NumberColumn("預設單價", format="%d 元", min_value=0)
         },
@@ -71,6 +70,7 @@ else:
         with c2:
             target_max = st.number_input("最高目標總價 (元)", min_value=0, value=88500, step=1000)
     
+    # 即時計算已紀錄單據的總額
     recorded_total_so_far = sum(r["小計"].sum() for r in st.session_state.all_receipts)
     remaining_budget = target_max - recorded_total_so_far
 
@@ -85,7 +85,6 @@ else:
 
     styled_init_df = apply_gray_style(df_init, ["魚種", "單價"])
 
-    # 👈 在這裡加入 height 參數來拉長輸入表格
     edited_df = st.data_editor(
         styled_init_df,
         column_config={
@@ -95,7 +94,7 @@ else:
         },
         hide_index=True,
         use_container_width=True,
-        height=600,  # 👈 調整這個數值可以改變表格高度 (預設約為 400)
+        height=600,
         key=f"editor_{st.session_state.editor_key}" 
     )
 
@@ -104,6 +103,7 @@ else:
 
     st.write(f"**當前這筆金額： {current_total:,.0f} 元**")
 
+    # 按鈕區
     col_btn1, col_btn2, col_btn3 = st.columns(3)
     
     with col_btn1:
@@ -113,11 +113,11 @@ else:
             elif current_total == 0:
                 st.warning("⚠️ 請先輸入數量再記錄。")
             elif (recorded_total_so_far + current_total) > target_max:
-                st.error(f"⚠️ 超出目標範圍！加上此單總額將達 {recorded_total_so_far + current_total:,.0f} 元，已超過上限 {target_max:,.0f} 元。請減少數量。")
+                st.error(f"⚠️ 超出目標範圍！加上此單總額將達 {recorded_total_so_far + current_total:,.0f} 元，已超過上限 {target_max:,.0f} 元。")
             else:
                 valid_record = edited_df[edited_df["數量/斤"] > 0].copy()
                 st.session_state.all_receipts.append(valid_record)
-                st.success(f"✅ 已記錄第 {len(st.session_state.all_receipts)} 張單據")
+                st.success(f"✅ 已記錄單據")
                 st.rerun()
 
     with col_btn2:
@@ -126,17 +126,19 @@ else:
             st.rerun()
 
     with col_btn3:
-        if st.button("🔄 全部重設", use_container_width=True):
+        if st.button("🔄 全部重設 (清空所有)", use_container_width=True):
             st.session_state.all_receipts = []
             st.session_state.editor_key += 1
             st.rerun()
 
     st.divider()
 
+    # --- 下方：顯示已紀錄單據 (新增單個刪除功能) ---
     st.subheader("📋 已紀錄單據明細")
     if not st.session_state.all_receipts:
         st.info("尚無紀錄單據。")
     else:
+        # 根據單據數量動態產生欄位
         cols = st.columns(len(st.session_state.all_receipts))
         for i, r_df in enumerate(st.session_state.all_receipts):
             with cols[i]:
@@ -144,13 +146,23 @@ else:
                 display_df = r_df[["魚種", "單價", "數量/斤", "小計"]]
                 styled_display = apply_gray_style(display_df, ["魚種", "單價", "小計"])
                 st.dataframe(styled_display, hide_index=True, use_container_width=True)
-                st.markdown(f"**單總計：<span style='color:#e74c3c;'>{r_df['小計'].sum():,.0f} 元</span>**", unsafe_allow_html=True)
+                
+                receipt_sum = r_df['小計'].sum()
+                st.markdown(f"**單總計：<span style='color:#e74c3c;'>{receipt_sum:,.0f} 元</span>**", unsafe_allow_html=True)
+                
+                # 👈 新增：刪除單張單據按鈕
+                if st.button(f"🗑️ 刪除單據 #{i+1}", key=f"delete_btn_{i}", use_container_width=True):
+                    st.session_state.all_receipts.pop(i) # 移除清單中第 i 個元素
+                    st.rerun() # 重新整理頁面
 
     st.divider()
 
+    # 最下方：總結報表
     if st.session_state.all_receipts:
         st.subheader("📊 最終彙整報表 (總結)")
         combined_df = pd.concat(st.session_state.all_receipts)
+        
+        # 彙整相同魚種
         summary_df = combined_df.groupby(["魚種", "單價"], as_index=False)[["數量/斤", "小計"]].sum()
         summary_df = summary_df[["魚種", "單價", "數量/斤", "小計"]]
         
