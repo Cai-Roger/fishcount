@@ -1,32 +1,33 @@
 import streamlit as st
 import pandas as pd
 
-# 設定網頁標題
-st.set_page_config(page_title="漁獲多單交易系統", layout="centered")
+# 1. 基本設定
+st.set_page_config(page_title="漁獲多單彙整系統", layout="wide")
+st.title("🐟 漁獲交易彙整系統 (最多三張單)")
 
-st.title("🐟 漁獲多單交易系統")
-
-# --- 1. 初始化資料與 Session State ---
-# 預設魚種與單價
-fish_data = {
+# --- 2. 初始化 Session State ---
+# 預設魚種資料
+fish_base = {
     "魚種": ["曲腰魚", "鰱魚", "吳郭魚", "鯽魚", "鯉魚", "青魚", "鯁魚", "泥鰍", "草魚", "溪蝦", "溪哥仔魚", "台灣石賓魚"],
     "單價": [385, 90, 95, 90, 75, 110, 70, 185, 110, 245, 240, 285]
 }
 
-# 用於儲存已完成的單據清單 (最多 3 張)
-if 'receipts' not in st.session_state:
-    st.session_state.receipts = []
+# 儲存已記錄的單據
+if 'all_receipts' not in st.session_state:
+    st.session_state.all_receipts = []
 
-# --- 2. 輸入區域 (秤重區) ---
-st.subheader("⚖️ 當前秤重輸入")
+# 用於控制上方輸入表格的重置
+if 'input_df' not in st.session_state:
+    df_init = pd.DataFrame(fish_base)
+    df_init["數量/斤"] = 0
+    st.session_state.input_df = df_init
 
-# 建立初始輸入 DataFrame
-input_df = pd.DataFrame(fish_data)
-input_df["數量/斤"] = 0
+# --- 3. 上方：數據輸入區 (秤重區) ---
+st.subheader("⚖️ 第一步：輸入當前魚獲數量")
 
-# 使用 data_editor 進行輸入
-edited_input = st.data_editor(
-    input_df,
+# 這裡使用一個表單或 key 來確保可以被重置
+edited_df = st.data_editor(
+    st.session_state.input_df,
     column_config={
         "魚種": st.column_config.Column(disabled=True),
         "單價": st.column_config.NumberColumn("單價 (元)", disabled=True, format="%d"),
@@ -34,62 +35,85 @@ edited_input = st.data_editor(
     },
     hide_index=True,
     use_container_width=True,
-    key="weighting_table"
+    key="editor"
 )
 
-# 計算當前秤重區的小計
-edited_input["小計"] = edited_input["單價"] * edited_input["數量/斤"]
-current_total = edited_input["小計"].sum()
+# 計算目前編輯中的小計
+temp_df = edited_df.copy()
+temp_df["小計"] = temp_df["單價"] * temp_df["數量/斤"]
+current_total = temp_df["小計"].sum()
 
-st.write(f"**當前預估總額： {current_total:,.0f} 元**")
-
-# --- 3. 單據操作按鈕 ---
-col_btn1, col_btn2 = st.columns([1, 1])
+# --- 4. 中間：操作按鈕 ---
+col_btn1, col_btn2, col_btn3 = st.columns(3)
 
 with col_btn1:
-    if st.button("➕ 完成並記錄此單據", use_container_width=True):
-        if len(st.session_state.receipts) >= 3:
-            st.error("❌ 已達上限（3張單據），請先清空再記錄。")
+    # 紀錄單據按鈕
+    if st.button("📝 記錄此單據 (存至下方)", use_container_width=True, type="primary"):
+        if len(st.session_state.all_receipts) >= 3:
+            st.error("❌ 已達三張單據上限！")
         elif current_total == 0:
-            st.warning("⚠️ 請先輸入數量再進行記錄。")
+            st.warning("⚠️ 請先輸入數量。")
         else:
-            # 只紀錄有數量的品項
-            final_items = edited_input[edited_input["數量/斤"] > 0].copy()
-            st.session_state.receipts.append(final_items)
-            st.success(f"✅ 已存入第 {len(st.session_state.receipts)} 張單據")
+            # 只存有數量的資料
+            valid_record = temp_df[temp_df["數量/斤"] > 0].copy()
+            st.session_state.all_receipts.append(valid_record)
+            st.success(f"✅ 已成功記錄第 {len(st.session_state.all_receipts)} 張單據")
             st.rerun()
 
 with col_btn2:
-    if st.button("🗑️ 清空所有單據", use_container_width=True):
-        st.session_state.receipts = []
+    # 清空上方輸入按鈕
+    if st.button("🧹 清空上方輸入 (填寫下一筆)", use_container_width=True):
+        # 重新初始化 input_df
+        df_reset = pd.DataFrame(fish_base)
+        df_reset["數量/斤"] = 0
+        st.session_state.input_df = df_reset
+        # 由於 Streamlit 的 data_editor key 機制，需要 rerun 來刷新畫面
+        st.rerun()
+
+with col_btn3:
+    # 全部重設
+    if st.button("🔄 全部重設 (刪除所有紀錄)", use_container_width=True):
+        st.session_state.all_receipts = []
+        df_reset = pd.DataFrame(fish_base)
+        df_reset["數量/斤"] = 0
+        st.session_state.input_df = df_reset
         st.rerun()
 
 st.divider()
 
-# --- 4. 顯示已記錄的單據 ---
+# --- 5. 下方：單據顯示區 ---
 st.subheader("📋 已紀錄單據明細")
-
-if not st.session_state.receipts:
-    st.info("尚無紀錄單據")
+if not st.session_state.all_receipts:
+    st.info("尚無紀錄單據。")
 else:
-    # 建立三個欄位來顯示三張單 (或者垂直排列)
-    for idx, r_df in enumerate(st.session_state.receipts):
-        with st.expander(f"📄 單據 #{idx + 1} - 詳情", expanded=True):
-            st.table(r_df[["魚種", "單價", "數量/斤", "小計"]])
-            st.write(f"**此單總計： {r_df['小計'].sum():,.0f} 元**")
+    cols = st.columns(len(st.session_state.all_receipts))
+    for i, r_df in enumerate(st.session_state.all_receipts):
+        with cols[i]:
+            st.markdown(f"**📄 單據 #{i+1}**")
+            st.dataframe(r_df[["魚種", "數量/斤", "小計"]], hide_index=True, use_container_width=True)
+            st.write(f"單總計：{r_df['小計'].sum():,.0f} 元")
 
-# --- 5. 總計報表 (最下方) ---
-if st.session_state.receipts:
-    st.divider()
-    st.subheader("📈 全單總結報表 (Total Summary)")
+st.divider()
+
+# --- 6. 最下方：最後總結報表 ---
+if st.session_state.all_receipts:
+    st.subheader("📊 三張單據 - 最終彙整報表")
     
-    # 合併所有單據資料進行計算
-    all_data = pd.concat(st.session_state.receipts)
-    grand_total_qty = all_data["數量/斤"].sum()
-    grand_total_price = all_data["小計"].sum()
+    # 合併所有單據
+    combined_df = pd.concat(st.session_state.all_receipts)
+    
+    # 按照魚種和單價進行群組加總 (彙整三張單中相同的魚)
+    summary_df = combined_df.groupby(["魚種", "單價"], as_index=False)[["數量/斤", "小計"]].sum()
+    
+    # 顯示總表
+    st.table(summary_df)
+    
+    # 計算全場總計
+    final_qty = summary_df["數量/斤"].sum()
+    final_price = summary_df["小計"].sum()
     
     c1, c2 = st.columns(2)
     with c1:
-        st.metric("總累計數量 (斤)", f"{grand_total_qty} 斤")
+        st.metric("總計總數量 (斤)", f"{final_qty} 斤")
     with c2:
-        st.metric("總累計金額 (TWD)", f"${grand_total_price:,.0f}")
+        st.metric("總計總金額 (TWD)", f"${final_price:,.0f} 元")
