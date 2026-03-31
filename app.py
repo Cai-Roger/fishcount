@@ -69,9 +69,9 @@ else:
     with st.expander("點擊設定預算範圍", expanded=True):
         c1, c2 = st.columns(2)
         with c1:
-            target_min = st.number_input("最低目標總價 (元)", min_value=0, value=0, step=1000)
+            target_min = st.number_input("最低目標總價 (元)", min_value=0, value=85770, step=1000)
         with c2:
-            target_max = st.number_input("最高目標總價 (元)", min_value=0, value=100000, step=1000)
+            target_max = st.number_input("最高目標總價 (元)", min_value=0, value=88500, step=1000)
     
     # 計算目前已紀錄單據的總額
     recorded_total_so_far = sum(r["小計"].sum() for r in st.session_state.all_receipts)
