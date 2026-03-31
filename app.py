@@ -33,17 +33,16 @@ if 'editor_key' not in st.session_state:
 
 # --- 3. 側邊欄導覽 ---
 st.sidebar.title("⚙️ 系統目錄")
+# 修正：確保 radio 選項與下方 if 判斷字串完全一致
 page = st.sidebar.radio("✨", ["💻主程式", "🛠️ 品項名稱及價格設定"])
 
 # ==========================================
 # 頁面：品項管理設定
 # ==========================================
-if page == "🛠️ 品項管理設定":
+if page == "🛠️ 品項名稱及價格設定":
     st.title("🛠️ 品項與價格管理")
-    st.write("您可以在此修改現有魚種、調整價格，或是新增/刪除品項。修改後將即時套用到計算機。")
+    st.write("您可以在此修改現有魚種、調整價格，或是新增/刪除品項。")
     
-    # 使用 data_editor 修改 Master List
-    # num_rows="dynamic" 允許使用者新增或刪除列
     new_master = st.data_editor(
         st.session_state.fish_master,
         num_rows="dynamic",
@@ -57,21 +56,38 @@ if page == "🛠️ 品項管理設定":
     
     if st.button("💾 儲存並套用修改"):
         st.session_state.fish_master = new_master
-        st.success("設定已更新！現在可以切換到「魚獲計算機」開始作業。")
+        st.success("設定已更新！")
 
 # ==========================================
-# 頁面：魚獲計算機
+# 頁面：魚獲計算機 (主程式)
 # ==========================================
 else:
     st.title("🐟 漁獲交易彙整系統")
 
-    # 準備輸入用的 DataFrame (從 Master List 產生)
+    # --- 新增：總價目標區間設定 ---
+    st.subheader("🎯 第一步：設定本次交易目標區間")
+    with st.expander("點擊設定預算範圍", expanded=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            target_min = st.number_input("最低目標總價 (元)", min_value=0, value=0, step=1000)
+        with c2:
+            target_max = st.number_input("最高目標總價 (元)", min_value=0, value=100000, step=1000)
+    
+    # 計算目前已紀錄單據的總額
+    recorded_total_so_far = sum(r["小計"].sum() for r in st.session_state.all_receipts)
+    remaining_budget = target_max - recorded_total_so_far
+
+    # 顯示預算進度
+    st.info(f"📊 目前狀態：已紀錄金額 **{recorded_total_so_far:,.0f}** 元 / 最高目標 **{target_max:,.0f}** 元 (剩餘額度: **{remaining_budget:,.0f}** 元)")
+
+    st.divider()
+
+    # 準備輸入用的 DataFrame
     df_init = st.session_state.fish_master.copy()
     df_init["數量/斤"] = 0
 
-    st.subheader("⚖️ 輸入當前魚獲數量")
+    st.subheader("⚖️ 第二步：輸入當前魚獲數量")
 
-    # 套用灰階樣式
     styled_init_df = apply_gray_style(df_init, ["魚種", "單價"])
 
     edited_df = st.data_editor(
@@ -86,20 +102,26 @@ else:
         key=f"editor_{st.session_state.editor_key}" 
     )
 
-    # 計算目前編輯中的小計
+    # 計算當前編輯中的小計
     edited_df["小計"] = edited_df["單價"] * edited_df["數量/斤"]
     current_total = edited_df["小計"].sum()
 
-    st.write(f"**當前這筆預估總額： {current_total:,.0f} 元**")
+    st.write(f"**當前這筆金額： {current_total:,.0f} 元**")
 
-    # 按鈕區
+    # --- 按鈕區 (含邏輯檢查) ---
     col_btn1, col_btn2, col_btn3 = st.columns(3)
+    
     with col_btn1:
         if st.button("📝 記錄此單據 (存至下方)", use_container_width=True, type="primary"):
+            # 檢查 1：是否超過三單
             if len(st.session_state.all_receipts) >= 3:
                 st.error("❌ 已達三張單據上限！")
+            # 檢查 2：是否有輸入數量
             elif current_total == 0:
-                st.warning("⚠️ 請先輸入數量。")
+                st.warning("⚠️ 請先輸入數量再記錄。")
+            # 檢查 3：【關鍵】檢查加總後是否超過最高目標
+            elif (recorded_total_so_far + current_total) > target_max:
+                st.error(f"⚠️ 超出目標範圍！加上此單總額將達 {recorded_total_so_far + current_total:,.0f} 元，已超過上限 {target_max:,.0f} 元。請減少數量。")
             else:
                 valid_record = edited_df[edited_df["數量/斤"] > 0].copy()
                 st.session_state.all_receipts.append(valid_record)
@@ -149,5 +171,13 @@ else:
         final_price = summary_df["小計"].sum()
         
         c1, c2 = st.columns(2)
-        with c1: st.metric("📦 總計總數量", f"{final_qty} 斤")
-        with c2: st.metric("💰 總計總金額", f"${final_price:,.0f} 元")
+        with c1: 
+            st.metric("📦 總計總數量", f"{final_qty} 斤")
+        with c2: 
+            # 根據是否在區間內改變顏色提示
+            if final_price < target_min:
+                st.metric("💰 總計總金額", f"${final_price:,.0f} 元", delta="低於最低目標", delta_color="inverse")
+            elif final_price > target_max:
+                st.metric("💰 總計總金額", f"${final_price:,.0f} 元", delta="超出上限", delta_color="normal")
+            else:
+                st.metric("💰 總計總金額", f"${final_price:,.0f} 元", delta="符合目標區間")
