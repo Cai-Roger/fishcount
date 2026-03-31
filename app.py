@@ -16,24 +16,20 @@ def apply_gray_style(df, cols):
 
 # --- 2. 初始化 Session State (核心資料儲存) ---
 
-# A. 初始魚種大清單 (Master List)
 if 'fish_master' not in st.session_state:
     st.session_state.fish_master = pd.DataFrame({
         "魚種": ["曲腰魚", "鰱魚", "吳郭魚", "鯽魚", "鯉魚", "青魚", "鯁魚", "泥鰍", "草魚", "溪蝦", "溪哥仔魚", "台灣石賓魚"],
         "單價": [385, 90, 95, 90, 75, 110, 70, 185, 110, 245, 240, 285]
     })
 
-# B. 儲存已記錄的單據
 if 'all_receipts' not in st.session_state:
     st.session_state.all_receipts = []
 
-# C. 編輯器重置 Key
 if 'editor_key' not in st.session_state:
     st.session_state.editor_key = 0
 
 # --- 3. 側邊欄導覽 ---
 st.sidebar.title("⚙️ 系統目錄")
-# 修正：確保 radio 選項與下方 if 判斷字串完全一致
 page = st.sidebar.radio("✨", ["💻主程式", "🛠️ 品項名稱及價格設定"])
 
 # ==========================================
@@ -43,11 +39,13 @@ if page == "🛠️ 品項名稱及價格設定":
     st.title("🛠️ 品項與價格管理")
     st.write("您可以在此修改現有魚種、調整價格，或是新增/刪除品項。")
     
+    # 設定頁的表格也可以加上 height 來拉長
     new_master = st.data_editor(
         st.session_state.fish_master,
         num_rows="dynamic",
         use_container_width=True,
         hide_index=True,
+        height=600,  # 👈 這裡加上 height 拉長表格
         column_config={
             "單價": st.column_config.NumberColumn("預設單價", format="%d 元", min_value=0)
         },
@@ -64,25 +62,22 @@ if page == "🛠️ 品項名稱及價格設定":
 else:
     st.title("🐟 漁獲交易彙整系統")
 
-    # --- 新增：總價目標區間設定 ---
+    # --- 總價目標區間設定 ---
     st.subheader("🎯 第一步：設定本次交易目標區間")
     with st.expander("點擊設定預算範圍", expanded=True):
         c1, c2 = st.columns(2)
         with c1:
-            target_min = st.number_input("最低目標總價 (元)", min_value=0, value=85770, step=1000)
+            target_min = st.number_input("最低目標總價 (元)", min_value=0, value=0, step=1000)
         with c2:
-            target_max = st.number_input("最高目標總價 (元)", min_value=0, value=88500, step=1000)
+            target_max = st.number_input("最高目標總價 (元)", min_value=0, value=100000, step=1000)
     
-    # 計算目前已紀錄單據的總額
     recorded_total_so_far = sum(r["小計"].sum() for r in st.session_state.all_receipts)
     remaining_budget = target_max - recorded_total_so_far
 
-    # 顯示預算進度
     st.info(f"📊 目前狀態：已紀錄金額 **{recorded_total_so_far:,.0f}** 元 / 最高目標 **{target_max:,.0f}** 元 (剩餘額度: **{remaining_budget:,.0f}** 元)")
 
     st.divider()
 
-    # 準備輸入用的 DataFrame
     df_init = st.session_state.fish_master.copy()
     df_init["數量/斤"] = 0
 
@@ -90,6 +85,7 @@ else:
 
     styled_init_df = apply_gray_style(df_init, ["魚種", "單價"])
 
+    # 👈 在這裡加入 height 參數來拉長輸入表格
     edited_df = st.data_editor(
         styled_init_df,
         column_config={
@@ -99,27 +95,23 @@ else:
         },
         hide_index=True,
         use_container_width=True,
+        height=600,  # 👈 調整這個數值可以改變表格高度 (預設約為 400)
         key=f"editor_{st.session_state.editor_key}" 
     )
 
-    # 計算當前編輯中的小計
     edited_df["小計"] = edited_df["單價"] * edited_df["數量/斤"]
     current_total = edited_df["小計"].sum()
 
     st.write(f"**當前這筆金額： {current_total:,.0f} 元**")
 
-    # --- 按鈕區 (含邏輯檢查) ---
     col_btn1, col_btn2, col_btn3 = st.columns(3)
     
     with col_btn1:
         if st.button("📝 記錄此單據 (存至下方)", use_container_width=True, type="primary"):
-            # 檢查 1：是否超過三單
             if len(st.session_state.all_receipts) >= 3:
                 st.error("❌ 已達三張單據上限！")
-            # 檢查 2：是否有輸入數量
             elif current_total == 0:
                 st.warning("⚠️ 請先輸入數量再記錄。")
-            # 檢查 3：【關鍵】檢查加總後是否超過最高目標
             elif (recorded_total_so_far + current_total) > target_max:
                 st.error(f"⚠️ 超出目標範圍！加上此單總額將達 {recorded_total_so_far + current_total:,.0f} 元，已超過上限 {target_max:,.0f} 元。請減少數量。")
             else:
@@ -141,7 +133,6 @@ else:
 
     st.divider()
 
-    # 下方：顯示已紀錄單據
     st.subheader("📋 已紀錄單據明細")
     if not st.session_state.all_receipts:
         st.info("尚無紀錄單據。")
@@ -157,7 +148,6 @@ else:
 
     st.divider()
 
-    # 最下方：總結報表
     if st.session_state.all_receipts:
         st.subheader("📊 最終彙整報表 (總結)")
         combined_df = pd.concat(st.session_state.all_receipts)
@@ -174,7 +164,6 @@ else:
         with c1: 
             st.metric("📦 總計總數量", f"{final_qty} 斤")
         with c2: 
-            # 根據是否在區間內改變顏色提示
             if final_price < target_min:
                 st.metric("💰 總計總金額", f"${final_price:,.0f} 元", delta="低於最低目標", delta_color="inverse")
             elif final_price > target_max:
