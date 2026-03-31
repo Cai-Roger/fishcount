@@ -1,58 +1,65 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 
-# 設定網頁標題與寬度
-st.set_page_config(page_title="我的 Streamlit 軟體", page_icon="🚀", layout="centered")
+# 設定網頁標題
+st.set_page_config(page_title="漁獲交易計算系統", layout="centered")
 
-st.title("🚀 我的 Streamlit 應用程式")
-st.write("Streamlit 讓 Web 開發變得超級簡單，特別適合做工具或儀表板！")
+st.title("🐟 漁獲交易計算系統")
+st.write("請在下表輸入**數量/斤**，系統將自動計算金額。")
 
-# ----------------------------------------
-# 功能一：狀態管理 (Session State) 範例 - 待辦清單
-# ----------------------------------------
-st.header("📝 簡易待辦清單")
+# 1. 根據你的 Excel 建立初始資料
+# 這裡固定了魚種和單價，讓使用者只需專注於輸入數量
+default_data = {
+    "魚種": ["曲腰魚", "鰱魚", "吳郭魚", "鯽魚", "鯉魚", "青魚", "鯁魚", "泥鰍", "草魚", "溪蝦", "溪哥仔魚", "台灣石賓魚"],
+    "單價": [385, 90, 95, 90, 75, 110, 70, 185, 110, 245, 240, 285],
+    "數量/斤": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] # 初始數量設為 0
+}
 
-# 初始化 session_state (為了讓每次網頁重新整理時，資料不會消失)
-if 'todos' not in st.session_state:
-    st.session_state.todos = []
+df = pd.DataFrame(default_data)
 
-# 排版：使用欄位 (Columns) 將輸入框和按鈕並排
-col1, col2 = st.columns([4, 1])
+# 2. 建立互動式編輯表格
+st.subheader("🛒 交易清單編輯")
 
-with col1:
-    # 這裡的文字輸入框
-    new_task = st.text_input("輸入新任務...", label_visibility="collapsed", placeholder="今天想做什麼？")
-
-with col2:
-    if st.button("新增", use_container_width=True):
-        if new_task:
-            st.session_state.todos.append(new_task)
-            st.rerun() # 強制重新整理頁面
-
-# 顯示任務
-if st.session_state.todos:
-    for i, task in enumerate(st.session_state.todos):
-        # 產生核取方塊
-        done = st.checkbox(task, key=f"task_{i}")
-        if done:
-            st.write(f"~~{task}~~ (已完成!)")
-else:
-    st.info("目前沒有任務，趕快新增一個吧！")
-
-st.divider() # 分隔線
-
-# ----------------------------------------
-# 功能二：數據視覺化 (Streamlit 的強項)
-# ----------------------------------------
-st.header("📊 數據圖表展示")
-st.write("你可以輕鬆把 Pandas DataFrame 變成圖表：")
-
-# 隨機生成 20 天的假數據
-chart_data = pd.DataFrame(
-    np.random.randn(20, 3),
-    columns=['產品 A', '產品 B', '產品 C']
+# 使用 st.data_editor 讓表格可編輯
+# 我們鎖定「魚種」和「單價」不讓使用者修改，只開放「數量/斤」
+edited_df = st.data_editor(
+    df,
+    column_config={
+        "魚種": st.column_config.Column(disabled=True),
+        "單價": st.column_config.NumberColumn("單價 (元)", disabled=True, format="%d"),
+        "數量/斤": st.column_config.NumberColumn("數量/斤", min_value=0, step=1),
+    },
+    hide_index=True,
+    use_container_width=True,
 )
 
-# 一行程式碼生成折線圖
-st.line_chart(chart_data)
+# 3. 計算邏輯 (核心功能)
+# 計算每一列的小計
+edited_df["小計"] = edited_df["單價"] * edited_df["數量/斤"]
+
+# 計算總金額
+total_amount = edited_df["小計"].sum()
+
+st.divider()
+
+# 4. 顯示結果
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("📊 計算結果明細")
+    # 只顯示有數量的品項（小計大於 0 的）
+    result_display = edited_df[edited_df["小計"] > 0]
+    if not result_display.empty:
+        st.dataframe(result_display[["魚種", "數量/斤", "小計"]], hide_index=True)
+    else:
+        st.info("目前尚未輸入任何數量。")
+
+with col2:
+    st.subheader("💰 總計金額")
+    # 用醒目的方式顯示總金額
+    st.metric(label="應收總額 (TWD)", value=f"${total_amount:,.0f}")
+    
+    if total_amount > 0:
+        if st.button("確認成交並清除資料"):
+            st.success("交易已記錄！(此處可串接資料庫存檔)")
+            # 這裡可以加入存入 CSV 或資料庫的程式碼
