@@ -33,7 +33,7 @@ if 'editor_key' not in st.session_state:
 
 # --- 3. 側邊欄導覽 ---
 st.sidebar.title("⚙️ 系統目錄")
-page = st.sidebar.radio("前往頁面：", ["💻主程式", "🛠️ 品項名稱及價格設定"])
+page = st.sidebar.radio("✨", ["💻主程式", "🛠️ 品項名稱及價格設定"])
 
 # ==========================================
 # 頁面：品項管理設定
@@ -69,7 +69,7 @@ else:
     df_init = st.session_state.fish_master.copy()
     df_init["數量/斤"] = 0
 
-    st.subheader("⚖️ 第一步：輸入當前魚獲數量")
+    st.subheader("⚖️ 輸入當前魚獲數量")
 
     # 套用灰階樣式
     styled_init_df = apply_gray_style(df_init, ["魚種", "單價"])
