@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 # 1. 基本設定
-st.set_page_config(page_title="漁獲交易進階系統", layout="wide")
+st.set_page_config(page_title="漁獲交易管理系統", layout="wide")
 
 # --- 定義外觀樣式函數 ---
 def apply_gray_style(df, cols):
@@ -32,8 +32,8 @@ if 'editor_key' not in st.session_state:
     st.session_state.editor_key = 0
 
 # --- 3. 側邊欄導覽 ---
-st.sidebar.title("⚙️ 系統選單")
-page = st.sidebar.radio("前往頁面：", ["🐟 魚獲計算機", "🛠️ 品項管理設定"])
+st.sidebar.title("⚙️ 系統目錄")
+page = st.sidebar.radio("前往頁面：", ["💻主程式", "🛠️ 品項名稱及價格設定"])
 
 # ==========================================
 # 頁面：品項管理設定
